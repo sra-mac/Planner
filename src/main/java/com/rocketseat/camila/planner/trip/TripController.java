@@ -1,12 +1,13 @@
 package com.rocketseat.camila.planner.trip;
 
-import com.rocketseat.camila.planner.participant.ParticipantService;
+import com.rocketseat.camila.planner.participant.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,7 +25,7 @@ public class TripController {
 
         this.repository.save(newTrip);
 
-        this.participantService.registerParticipantsToEvent(payload.emails_to_invite(), newTrip.getId());
+        this.participantService.registerParticipantsToEvent(payload.emails_to_invite(), newTrip);
 
         return ResponseEntity.ok(new TripCreateResponse(newTrip.getId()));
     }
@@ -50,6 +51,41 @@ public class TripController {
             return ResponseEntity.ok(rowTrip);
         }
         return ResponseEntity.notFound().build();
+    }
+    @GetMapping("/{id}/confirm")
+    public ResponseEntity<Trip> confirmTrip(@PathVariable UUID id){
+        Optional<Trip> trip = this.repository.findById(id);
+
+        if(trip.isPresent()){
+            Trip rowTrip = trip.get();
+            rowTrip.setIsConfirmed(true);
+            this.repository.save(rowTrip);
+
+            this.participantService.triggerConfirmationEmailToParticipants(id);
+            return ResponseEntity.ok(rowTrip);
+        }
+        return ResponseEntity.notFound().build();
+    }
+    @PostMapping("/{id}/invite")
+    public ResponseEntity<ParticipantCreateResponse> inviteParticipant(@PathVariable UUID id, @RequestBody ParticipantsRequestPayload payload){
+        Optional<Trip> trip = this.repository.findById(id);
+
+        if(trip.isPresent()){
+            Trip rowTrip = trip.get();
+            ParticipantCreateResponse participantResponse = this.participantService.registerParticipantToEvent( payload.email(), rowTrip);
+
+            if(rowTrip.getIsConfirmed()) this.participantService.triggerConfirmationEmailToParticipant(payload.email());
+
+            return ResponseEntity.ok(participantResponse);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/{id}/participants")
+    public ResponseEntity<List<ParticipantDTO>> getAllParticipants(@PathVariable UUID id){
+        List<ParticipantDTO> participantList = this.participantService.getAllParticipantsFromEvent(id);
+
+        return ResponseEntity.ok(participantList);
     }
 }
 
